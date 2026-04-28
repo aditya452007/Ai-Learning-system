@@ -3,135 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MultiRAG | Neural Nexus</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-
+    <title>MultiRAG Learning Workspace</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <svg aria-hidden="true" class="icon-sprite">
+        <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4-4 4"/><path d="M20 16.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.5"/></symbol>
+        <symbol id="icon-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/></symbol>
+        <symbol id="icon-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></symbol>
+        <symbol id="icon-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H21"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H21v20H6.5A2.5 2.5 0 0 1 4 19.5z"/></symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+        <symbol id="icon-graph" viewBox="0 0 24 24"><circle cx="6" cy="7" r="3"/><circle cx="18" cy="7" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8.5 8.5 11 15m4.5-6.5L13 15M9 7h6"/></symbol>
+        <symbol id="icon-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></symbol>
+    </svg>
 
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
-    <div class="scanlines"></div>
-
-    <div id="app">
-        <section id="view-ingestion">
-            <div class="glass-panel hub-card">
-                <header class="hub-header">
-                    <div class="logo">
-                        <i class="ph-fill ph-brain"></i>
-                        <span>MultiRAG</span>
-                    </div>
-                    <div class="status-badge">System Online</div>
-                </header>
-                
-                <div class="ingest-content">
-                    <h1 class="hero-title">Knowledge <span class="text-gradient">Injection</span></h1>
-                    <p class="hero-subtitle">Upload documents or crawl the web to initialize the neural index.</p>
-
-                    <div id="drop-zone" class="drop-zone">
-                        <div class="icon-wrapper">
-                            <i class="ph-duotone ph-file-cloud"></i>
-                        </div>
-                        <h3>Drop Data Source</h3>
-                        <p>PDF, MD, TXT (Max 50MB)</p>
-                        <input type="file" id="file-input" hidden accept=".pdf,.md,.txt">
-                    </div>
-
-                    <div class="divider">
-                        <span>OR CONNECT VIA URL</span>
-                    </div>
-
-                    <div class="input-group">
-                        <i class="ph ph-link input-icon"></i>
-                        <input type="text" id="url-input" placeholder="https://docs.anthropic.com/..." autocomplete="off">
-                        <button id="scrape-btn" class="glow-btn">
-                            <i class="ph-bold ph-arrow-right"></i>
-                        </button>
-                    </div>
+    <div class="app-shell">
+        <aside class="left-rail" aria-label="Workspace and sources">
+            <header class="brand">
+                <div class="brand-mark">MR</div>
+                <div>
+                    <strong>MultiRAG</strong>
+                    <span>Learning Workspace</span>
                 </div>
+            </header>
 
-                <div id="processing-overlay" class="hidden">
-                    <div class="loader-content">
-                        <div class="spinner"></div>
-                        <span class="mono" id="terminal-text">Initializing Vector Stream...</span>
-                    </div>
+            <section class="panel-section service-card" aria-live="polite">
+                <div class="section-heading">
+                    <span>Backend</span>
+                    <span id="health-pill" class="pill muted">checking</span>
                 </div>
-            </div>
-        </section>
+                <p id="health-copy">Looking for the local FastAPI service.</p>
+            </section>
 
-        <section id="view-synapse" class="hidden">
-            
-            <aside class="sidebar glass-panel">
-                <div class="sidebar-header">
-                    <div class="logo-small">
-                        <i class="ph-fill ph-brain"></i>
-                        <span>MultiRAG</span>
-                    </div>
-                </div>
-                
-                <div class="meta-section">
-                    <div class="section-label">Active Knowledge Base</div>
-                    <div class="meta-card">
-                        <div class="meta-row">
-                            <i class="ph ph-file-text"></i>
-                            <span id="meta-filename" class="text-truncate">unknown.pdf</span>
-                        </div>
-                        <div class="meta-details">
-                            <span id="meta-size" class="tag">0 MB</span>
-                            <span id="meta-tokens" class="tag">0 Tok</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="sidebar-footer">
-                    <button id="reset-session" class="danger-btn">
-                        <i class="ph ph-trash"></i>
-                        <span>Purge Memory</span>
+            <section class="panel-section">
+                <div class="section-heading">
+                    <span>Workspace</span>
+                    <button id="new-workspace-btn" class="icon-button" title="Create workspace" aria-label="Create workspace">
+                        <svg><use href="#icon-plus"></use></svg>
                     </button>
                 </div>
-            </aside>
+                <form id="workspace-form" class="workspace-form">
+                    <input id="workspace-name" type="text" maxlength="120" placeholder="Exam prep, research notes...">
+                    <button type="submit">Create</button>
+                </form>
+                <div id="workspace-list" class="workspace-list" aria-label="Available workspaces"></div>
+            </section>
 
-            <main class="chat-viewport">
-                <header class="chat-header glass-panel">
-                    <div class="model-status">
-                        <div class="indicator pulse"></div>
-                        <span>Gemini 2.5 Flash // RAG Enabled</span>
+            <section class="panel-section source-section">
+                <div class="section-heading">
+                    <span>Sources</span>
+                    <span id="source-count">0 files</span>
+                </div>
+                <label id="drop-zone" class="drop-zone" for="file-input">
+                    <input id="file-input" type="file" multiple accept=".pdf,.md,.txt,.py,.js,.ts,.tsx,.jsx,.html,.css,.json">
+                    <svg><use href="#icon-upload"></use></svg>
+                    <strong>Add study material</strong>
+                    <span>Drop files or browse</span>
+                </label>
+                <form id="url-form" class="url-form">
+                    <svg><use href="#icon-link"></use></svg>
+                    <input id="url-input" type="url" placeholder="https://article-or-docs-page.com">
+                    <button type="submit" aria-label="Add URL">Add</button>
+                </form>
+                <div class="ingest-steps" aria-label="Ingestion progress">
+                    <span data-step="load">Load</span>
+                    <span data-step="chunk">Chunk</span>
+                    <span data-step="index">Index</span>
+                    <span data-step="graph">Graph</span>
+                </div>
+                <p id="ingest-status" class="quiet-line">Choose a workspace, then add notes, PDFs, code, or a URL.</p>
+            </section>
+
+            <footer class="rail-footer">
+                <button id="reset-btn" class="text-button">
+                    <svg><use href="#icon-reset"></use></svg>
+                    Reset local memory
+                </button>
+            </footer>
+        </aside>
+
+        <main class="study-stage" aria-label="Grounded question answering">
+            <header class="stage-header">
+                <div>
+                    <span class="eyebrow">Ask with evidence</span>
+                    <h1 id="workspace-title">Choose or create a workspace</h1>
+                </div>
+                <div class="workspace-stats">
+                    <span><strong id="stat-sources">0</strong> sources</span>
+                    <span><strong id="stat-chunks">0</strong> chunks</span>
+                    <span><strong id="stat-version">0</strong> index</span>
+                </div>
+            </header>
+
+            <section class="mode-bar" aria-label="Retrieval mode">
+                <button class="mode-option active" data-mode="auto">Auto</button>
+                <button class="mode-option" data-mode="hybrid">Hybrid</button>
+                <button class="mode-option" data-mode="semantic">Semantic</button>
+                <button class="mode-option" data-mode="keyword">Keyword</button>
+                <button class="mode-option" data-mode="graph">Graph</button>
+            </section>
+
+            <section id="chat-stream" class="chat-stream" aria-live="polite">
+                <article class="empty-state">
+                    <div class="learner-illustration" aria-hidden="true">
+                        <svg viewBox="0 0 260 190">
+                            <rect x="28" y="122" width="206" height="38" rx="7" fill="#e9ece7"/>
+                            <rect x="48" y="66" width="106" height="75" rx="8" fill="#ffffff" stroke="#1f2622" stroke-width="3"/>
+                            <path d="M64 86h54M64 104h72M64 122h42" stroke="#7b8580" stroke-width="5" stroke-linecap="round"/>
+                            <circle cx="183" cy="67" r="25" fill="#f4c27b" stroke="#1f2622" stroke-width="3"/>
+                            <path d="M164 68c8 10 25 11 38-1" stroke="#1f2622" stroke-width="3" fill="none" stroke-linecap="round"/>
+                            <path d="M150 134c5-34 60-35 66 0" fill="#6aa17a" stroke="#1f2622" stroke-width="3"/>
+                            <path d="M136 86c-17 6-28 17-34 33" stroke="#d96c4b" stroke-width="9" stroke-linecap="round"/>
+                            <path d="M220 84c12 9 18 20 18 34" stroke="#d96c4b" stroke-width="9" stroke-linecap="round"/>
+                            <circle cx="89" cy="42" r="13" fill="#d96c4b"/>
+                            <circle cx="122" cy="34" r="8" fill="#6aa17a"/>
+                            <circle cx="222" cy="42" r="10" fill="#f0b84f"/>
+                        </svg>
                     </div>
-                </header>
+                    <h2>Build a study base, then ask.</h2>
+                    <p>Answers will appear here with citations, retrieval diagnostics, and graph context beside them.</p>
+                </article>
+            </section>
 
-                <div id="chat-stream" class="chat-stream">
-                    <div class="message ai entrance-anim">
-                        <div class="avatar">
-                            <i class="ph-fill ph-sparkle"></i>
-                        </div>
-                        <div class="content glass-bubble">
-                            <p>Neural link established. Accessing data from <span id="chat-intro-filename" class="text-accent">...</span>. <br>I am ready to process your queries.</p>
-                        </div>
+            <form id="chat-form" class="composer">
+                <div class="composer-inner">
+                    <textarea id="question-input" rows="1" placeholder="Ask about a topic, compare ideas, or request a source guide..." disabled></textarea>
+                    <button id="send-btn" type="submit" class="send-button" disabled aria-label="Send question">
+                        <svg><use href="#icon-send"></use></svg>
+                    </button>
+                </div>
+            </form>
+        </main>
+
+        <aside class="right-panel" aria-label="Evidence and learning tools">
+            <nav class="tabs" aria-label="Inspector tabs">
+                <button class="tab-button active" data-tab="evidence">Evidence</button>
+                <button class="tab-button" data-tab="guide">Guide</button>
+                <button class="tab-button" data-tab="graph">Graph</button>
+            </nav>
+
+            <section id="tab-evidence" class="tab-panel active">
+                <div class="section-heading">
+                    <span>Retrieved Context</span>
+                    <span id="citation-count">0 cites</span>
+                </div>
+                <div id="evidence-list" class="evidence-list">
+                    <div class="placeholder-box">
+                        <svg><use href="#icon-search"></use></svg>
+                        <p>Ask a question to see the chunks that supported the answer.</p>
                     </div>
                 </div>
+                <div id="diagnostics" class="diagnostics-grid"></div>
+            </section>
 
-                <div class="input-dock glass-panel">
-                    <div class="input-wrapper">
-                        <textarea id="chat-input" rows="1" placeholder="Query the vector store..."></textarea>
-                        <button id="send-btn" class="send-btn">
-                            <i class="ph-fill ph-paper-plane-right"></i>
-                        </button>
+            <section id="tab-guide" class="tab-panel">
+                <div class="section-heading">
+                    <span>Source Guide</span>
+                    <button id="guide-refresh" class="text-button compact">Refresh</button>
+                </div>
+                <div id="guide-content" class="guide-content">
+                    <div class="placeholder-box">
+                        <svg><use href="#icon-book"></use></svg>
+                        <p>Ingest a source to generate a learning guide.</p>
                     </div>
                 </div>
-            </main>
-        </section>
+            </section>
+
+            <section id="tab-graph" class="tab-panel">
+                <div class="section-heading">
+                    <span>Concept Map</span>
+                    <button id="graph-refresh" class="text-button compact">Refresh</button>
+                </div>
+                <div id="graph-canvas" class="graph-canvas">
+                    <div class="placeholder-box">
+                        <svg><use href="#icon-graph"></use></svg>
+                        <p>The concept graph appears after sources are indexed.</p>
+                    </div>
+                </div>
+            </section>
+        </aside>
     </div>
 
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script src="app.js"></script>
 </body>
 </html>

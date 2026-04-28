@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+pytest-cache-files-*/
+backend/pytest-cache-files-*/
 .ruff_cache/
 .venv/
 venv/
@@ -9,4 +11,3 @@ data/cache/*
 !data/workspaces/.gitkeep
 !data/cache/.gitkeep
 .env
-
