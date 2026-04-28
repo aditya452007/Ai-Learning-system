@@ -1,61 +1,103 @@
-"""URL loader with stdlib fetching, timeout, and basic HTML cleanup."""
+"""URL loader with BeautifulSoup and single-level crawling.
+
+Based on working implementation from Multi_Rag.ipynb.
+Uses requests + BeautifulSoup for robust HTML extraction.
+Only crawls the initial URL (single level) as per requirements.
+"""
 
 from __future__ import annotations
 
-import html
-import re
-import urllib.request
-from html.parser import HTMLParser
+import logging
+from typing import Optional
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from app.domain.models.source_document import SourceInput, SourceType
 from app.infrastructure.loaders.base_loader import BaseLoader
+from app.infrastructure.utils.text_processor import text_processor
 
-
-class _TextExtractor(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: list[str] = []
-        self.skip_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in {"script", "style", "noscript"}:
-            self.skip_depth += 1
-        if tag in {"p", "br", "li", "h1", "h2", "h3", "h4"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style", "noscript"} and self.skip_depth:
-            self.skip_depth -= 1
-        if tag in {"p", "li", "h1", "h2", "h3", "h4"}:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if not self.skip_depth:
-            self.parts.append(data)
-
-    def text(self) -> str:
-        value = html.unescape(" ".join(self.parts))
-        return re.sub(r"[ \t]+", " ", value)
+logger = logging.getLogger(__name__)
 
 
 class WebLoader(BaseLoader):
+    """
+    Web content loader using requests and BeautifulSoup.
+    Extracts meaningful content from single URL (no deep crawling).
+    """
+
     source_type = SourceType.URL
 
-    def __init__(self, timeout_seconds: int = 10) -> None:
+    def __init__(self, timeout_seconds: int = 10, max_retries: int = 3) -> None:
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
+
+        # Setup session with retries
+        self.session = requests.Session()
+        retry_strategy = Retry(
+            total=max_retries,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=10,
+            max_retries=retry_strategy
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
 
     async def extract_text(self, source_input: SourceInput) -> tuple[str, dict[str, object]]:
-        request = urllib.request.Request(
-            source_input.uri,
-            headers={"User-Agent": "MultiRAGLearningSystem/0.1"},
+        """
+        Extract text from URL using requests + BeautifulSoup.
+        Only fetches the single URL (no crawling).
+        """
+        url = source_input.uri
+
+        try:
+            response = self.session.get(url, timeout=self.timeout_seconds)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to fetch URL {url}: {e}")
+            raise
+
+        content_type = response.headers.get("content-type", "")
+        size_bytes = len(response.content)
+
+        # Only process HTML content
+        if "text/html" not in content_type.lower():
+            logger.warning(f"Non-HTML content at {url}: {content_type}")
+            return response.text, {
+                "url": url,
+                "content_type": content_type,
+                "size_bytes": size_bytes,
+                "extractor": "raw_text",
+            }
+
+        # Extract meaningful content
+        final_text = text_processor.extract_meaningful_content(
+            response.content,
+            url=url
         )
-        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            content_type = response.headers.get("content-type", "")
-            raw = response.read(2_000_000)
-        decoded = raw.decode("utf-8", errors="ignore")
-        if "html" in content_type.lower() or "<html" in decoded[:500].lower():
-            parser = _TextExtractor()
-            parser.feed(decoded)
-            decoded = parser.text()
-        return decoded, {"content_type": content_type, "size_bytes": len(raw)}
+
+        if not final_text:
+            logger.warning(f"No meaningful text extracted from {url}")
+            return "", {
+                "url": url,
+                "content_type": content_type,
+                "size_bytes": size_bytes,
+                "extractor": "beautifulsoup",
+                "error": "No extractable text",
+            }
+
+        return final_text, {
+            "url": url,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+            "extractor": "beautifulsoup",
+        }
 

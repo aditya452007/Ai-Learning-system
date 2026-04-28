@@ -11,9 +11,19 @@ from app.infrastructure.chunkers.recursive_text_chunker import RecursiveTextChun
 
 
 class MarkdownChunker(RecursiveTextChunker):
-    version = "markdown-v1"
+    """Markdown-aware chunker preserving heading structure."""
+
+    version = "markdown-v2"
+
+    def __init__(
+        self,
+        chunk_size: int | None = None,
+        chunk_overlap: int | None = None,
+    ) -> None:
+        super().__init__(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     def chunk(self, source: SourceDocument, loaded: LoadedSource) -> list[DocumentChunk]:
+        """Chunk markdown preserving heading hierarchy."""
         sections = self._sections(loaded.text)
         chunks: list[DocumentChunk] = []
         for section_text, heading, start_line, end_line in sections:
