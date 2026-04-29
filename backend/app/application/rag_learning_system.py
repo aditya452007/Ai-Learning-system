@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from app.application.services.citation_verifier import CitationVerifier
@@ -27,7 +28,7 @@ from app.infrastructure.embeddings.sentence_transformer_embeddings import (
     HashingEmbeddingProvider,
     SentenceTransformerEmbeddingProvider,
 )
-from app.infrastructure.generation.gemini_provider import GeminiProvider
+from app.infrastructure.generation.unified_provider import UnifiedGenerationProvider, UnifiedProviderFactory
 from app.infrastructure.loaders.code_loader import CodeLoader
 from app.infrastructure.loaders.markdown_loader import MarkdownLoader
 from app.infrastructure.loaders.pdf_loader import PdfLoader
@@ -37,8 +38,11 @@ from app.infrastructure.loaders.web_loader import WebLoader
 from app.infrastructure.persistence.disk_cache_store import DiskCacheStore
 from app.infrastructure.persistence.file_workspace_repository import FileWorkspaceRepository
 from app.infrastructure.retrieval.bm25_store import Bm25Store
+from app.infrastructure.retrieval.chroma_vector_store import ChromaVectorStore
 from app.infrastructure.retrieval.faiss_vector_store import FaissVectorStore
 from app.infrastructure.retrieval.graph_networkx_store import GraphNetworkxStore
+
+logger = logging.getLogger(__name__)
 
 
 class RagLearningSystem:
@@ -66,6 +70,9 @@ class RagLearningSystem:
         cache_store = DiskCacheStore(settings.cache_dir)
         index_dir = settings.data_dir / "_indexes"
 
+        # Ensure ChromaDB directory exists
+        settings.chroma_persist_dir.mkdir(parents=True, exist_ok=True)
+
         loader = UnifiedLoader(
             {
                 SourceType.PDF: PdfLoader(),
@@ -75,19 +82,36 @@ class RagLearningSystem:
                 SourceType.CODE: CodeLoader(),
             }
         )
-        text_chunker = RecursiveTextChunker(settings.chunk_size_tokens, settings.chunk_overlap_tokens)
-        markdown_chunker = MarkdownChunker(settings.chunk_size_tokens, settings.chunk_overlap_tokens)
+        
+        # Use new settings names (chunk_size, chunk_overlap)
+        text_chunker = RecursiveTextChunker(settings.chunk_size, settings.chunk_overlap)
+        markdown_chunker = MarkdownChunker(settings.chunk_size, settings.chunk_overlap)
         code_chunker = CodeChunker()
-        base_embedding_provider = (
-            SentenceTransformerEmbeddingProvider(settings.embedding_model)
-            if settings.embedding_model != "local-hashing-384"
-            else HashingEmbeddingProvider()
-        )
+        
+        # Modern embedding provider with sentence-transformers
+        if settings.embedding_model == "local-hashing-384":
+            base_embedding_provider = HashingEmbeddingProvider()
+        else:
+            base_embedding_provider = SentenceTransformerEmbeddingProvider(
+                model_name=settings.embedding_model,
+            )
+        
         embedding_provider = CachedEmbeddingProvider(base_embedding_provider, cache_store)
-        vector_store = FaissVectorStore(index_dir)
+        
+        # Select vector store based on settings
+        if settings.vector_store_type == "chroma":
+            logger.info(f"Using ChromaDB vector store at {settings.chroma_persist_dir}")
+            vector_store = ChromaVectorStore(
+                persist_dir=settings.chroma_persist_dir,
+                embedding_model=settings.embedding_model,
+            )
+        else:
+            logger.info(f"Using FAISS vector store at {index_dir}")
+            vector_store = FaissVectorStore(index_dir)
+        
         keyword_store = Bm25Store(index_dir)
         graph_store = GraphNetworkxStore(index_dir)
-        generation_provider = GeminiProvider(settings.gemini_api_key, settings.generation_model)
+        generation_provider = UnifiedProviderFactory.get_provider()
 
         create_workspace = CreateWorkspace(repository)
         ingest_sources = IngestSources(
@@ -138,9 +162,11 @@ class RagLearningSystem:
         query: str,
         retrieval_mode: RetrievalMode = RetrievalMode.HYBRID,
         top_k: int = 6,
+        generation_params: dict | None = None,
     ) -> Answer:
         return await self._ask_question.execute(
-            RetrievalQuery(workspace_id=workspace_id, text=query, mode=retrieval_mode, top_k=top_k)
+            RetrievalQuery(workspace_id=workspace_id, text=query, mode=retrieval_mode, top_k=top_k),
+            generation_params=generation_params,
         )
 
     def get_graph(self, workspace_id: str, focus_node_id: str | None = None, depth: int = 1) -> GraphSnapshot:

@@ -15,7 +15,7 @@ def _load_dotenv(path: Path) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        os.environ[key.strip()] = value.strip().strip('"').strip("'")
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +40,9 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         repo_root = Path(__file__).resolve().parents[4]
-        _load_dotenv(repo_root / ".env")
+        backend_root = Path(__file__).resolve().parents[3]
+        _load_dotenv(backend_root / ".env")          # backend/.env (primary)
+        _load_dotenv(repo_root / ".env")              # repo root .env
         _load_dotenv(repo_root / "MultRAG System" / ".env")
 
         data_dir = Path(os.getenv("MULTIRAG_DATA_DIR", repo_root / "data" / "workspaces"))

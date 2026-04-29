@@ -83,7 +83,8 @@ class IngestSources:
         all_chunks = self.repository.list_chunks(workspace_id)
         self.keyword_store.build(workspace_id, all_chunks)
         try:
-            self.graph_store.build(workspace_id, all_sources, all_chunks)
+            if added_sources or added_chunks:
+                self.graph_store.build(workspace_id, added_sources, added_chunks)
         except Exception as exc:
             warnings.append(f"Graph build degraded: {exc}")
 

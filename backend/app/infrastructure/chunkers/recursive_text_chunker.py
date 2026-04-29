@@ -34,10 +34,10 @@ class RecursiveTextChunker:
             chunk_size: Target chunk size (default from settings)
             chunk_overlap: Overlap between chunks (default from settings)
         """
-        # Use settings defaults if not provided
-        settings = Settings.from_env()
-        self.chunk_size = chunk_size or settings.chunk_size
-        self.chunk_overlap = chunk_overlap or settings.chunk_overlap
+        # Use provided values or defaults
+        # Avoid calling Settings.from_env() here to prevent file I/O cascade
+        self.chunk_size = chunk_size or 512
+        self.chunk_overlap = chunk_overlap or 64
         self._splitter = self._create_splitter()
 
     def _create_splitter(self):
@@ -136,14 +136,21 @@ class RecursiveTextChunker:
             return (ordinal * 10 + 1, ordinal * 10 + 10)
 
         # Try to find by content matching
-        chunk_start = chunk_text[:50].strip() if len(chunk_text) > 50 else chunk_text.strip()
+        first_line_text = chunk_text.strip().split("\n")[0][:50].strip()
+        
+        best_line = 1
+        if first_line_text:
+            for i, line in enumerate(all_lines):
+                if first_line_text in line:
+                    best_line = i + 1
+                    break
+        else:
+            # Fallback estimation
+            best_line = min(ordinal * 10 + 1, len(all_lines))
 
-        # Estimate based on chunk position
-        total_lines = len(all_lines)
-        est_start = min(ordinal * (total_lines // max(1, ordinal + 1)) + 1, total_lines)
-        est_end = min(est_start + 20, total_lines)
-
-        return (est_start, est_end)
+        # Calculate exact length
+        num_lines = max(1, chunk_text.count("\n") + 1)
+        return (best_line, min(best_line + num_lines - 1, len(all_lines)))
 
     def _token_count(self, text: str) -> int:
         """Rough token count estimate."""

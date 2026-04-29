@@ -56,8 +56,8 @@ class TextProcessor:
         # 4. Collapse excessive newlines
         cleaned_text = self.multi_newline.sub("\n\n", cleaned_text)
 
-        # 5. Filter for printable ASCII (keep newlines)
-        cleaned_text = "".join(c for c in cleaned_text if c.isprintable() or c == "\n")
+        # 5. Filter for printable ASCII (keep newlines and tabs)
+        cleaned_text = "".join(c for c in cleaned_text if c.isprintable() or c in ("\n", "\t"))
 
         cleaned_text = cleaned_text.strip()
 
@@ -98,8 +98,8 @@ class TextProcessor:
 
         # Remove garbage tags that don't contain meaningful content
         garbage_tags = {
-            "script", "style", "noscript", "svg", "header", "footer",
-            "nav", "aside", "form", "iframe", "button", "input",
+            "script", "style", "noscript", "svg", "footer",
+            "nav", "iframe", "button", "input",
             "select", "textarea", "meta", "link"
         }
 

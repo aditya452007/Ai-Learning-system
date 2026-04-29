@@ -6,6 +6,7 @@ Supports both local SentenceTransformer embeddings and API-based embeddings.
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -122,15 +123,26 @@ class ChromaVectorStore(VectorStorePort):
         # Prepare data
         ids = [chunk.id for chunk in chunks]
         documents = [chunk.text for chunk in chunks]
+        def _sanitize_metadata(meta: dict) -> dict:
+            sanitized = {}
+            for k, v in meta.items():
+                if v is None:
+                    continue
+                if isinstance(v, (str, int, float, bool)):
+                    sanitized[k] = v
+                else:
+                    sanitized[k] = json.dumps(v)
+            return sanitized
+
         metadatas = [
-            {
+            _sanitize_metadata({
                 "source_id": chunk.source_id,
                 "workspace_id": chunk.workspace_id,
                 "chunk_hash": chunk.chunk_hash,
                 "token_count": chunk.token_count,
                 "location_label": chunk.location.label(),
                 **chunk.metadata,
-            }
+            })
             for chunk in chunks
         ]
 

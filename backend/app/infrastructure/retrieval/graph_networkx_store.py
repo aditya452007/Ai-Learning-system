@@ -26,6 +26,24 @@ class GraphNetworkxStore:
         edges: dict[str, GraphEdge] = {}
         concept_weights: Counter[str] = Counter()
 
+        # Load existing graph
+        existing = self._read(self._path(workspace_id))
+        for item in existing.get("nodes", []):
+            try:
+                node = self._node_from_dict(item)
+                nodes[node.id] = node
+                if node.type == GraphNodeType.CONCEPT:
+                    concept_weights[node.id] = int(node.weight)
+            except Exception:
+                pass
+
+        for item in existing.get("edges", []):
+            try:
+                edge = GraphEdge(**item)
+                edges[edge.id] = edge
+            except Exception:
+                pass
+
         for source in sources:
             nodes[source.id] = GraphNode(source.id, source.title, GraphNodeType.SOURCE, weight=1)
 

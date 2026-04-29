@@ -2,10 +2,12 @@
 
 Based on working implementation from Multi_Rag.ipynb.
 Uses SentenceTransformer with proper GPU/CPU handling and normalization.
+LAZY LOADING: Model is only loaded on first use to prevent startup timeouts.
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import logging
 import math
@@ -17,10 +19,30 @@ from app.domain.ports.embedding_provider import EmbeddingProviderPort
 logger = logging.getLogger(__name__)
 
 
+def _lazy_model_loader(model_name: str, device: str) -> Any:
+    """
+    Lazy model loader - only called on first use.
+    Prevents startup timeouts from model download/loading.
+    """
+    try:
+        from sentence_transformers import SentenceTransformer
+
+        logger.info(f"Loading embedding model {model_name} on {device}...")
+        model = SentenceTransformer(model_name, device=device)
+        logger.info(f"Embedding model loaded successfully")
+        return model
+    except ImportError as e:
+        logger.error(
+            "sentence-transformers not installed. "
+            "Install with: pip install sentence-transformers"
+        )
+        raise ImportError("sentence-transformers required") from e
+
+
 class SentenceTransformerEmbeddingProvider(EmbeddingProviderPort):
     """
     Modern sentence-transformers adapter with GPU support.
-    Uses cached model loading and efficient batch encoding.
+    Uses LAZY LOADING - model is only loaded on first use.
     """
 
     def __init__(
@@ -31,6 +53,7 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProviderPort):
     ) -> None:
         """
         Initialize embedding provider.
+        NOTE: Model is NOT loaded here - lazy loaded on first embed call.
 
         Args:
             model_name: HuggingFace model name
@@ -41,6 +64,7 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProviderPort):
         self._normalize = normalize_embeddings
         self._device = device or self._auto_device()
         self._model: Any | None = None
+        self._model_loaded = False
 
     def _auto_device(self) -> str:
         """Auto-detect best available device."""
@@ -50,23 +74,11 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProviderPort):
         except ImportError:
             return "cpu"
 
-    def _load_model(self) -> Any:
-        """Lazy load the SentenceTransformer model."""
-        if self._model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-
-                logger.info(f"Loading embedding model {self._model_name} on {self._device}")
-                self._model = SentenceTransformer(
-                    self._model_name,
-                    device=self._device,
-                )
-            except ImportError as e:
-                logger.error(
-                    "sentence-transformers not installed. "
-                    "Install with: pip install sentence-transformers"
-                )
-                raise ImportError("sentence-transformers required") from e
+    def _ensure_model(self) -> Any:
+        """Lazy load model on first use."""
+        if not self._model_loaded:
+            self._model = _lazy_model_loader(self._model_name, self._device)
+            self._model_loaded = True
         return self._model
 
     @property
@@ -86,7 +98,7 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProviderPort):
         if not texts:
             return []
 
-        model = self._load_model()
+        model = self._ensure_model()
 
         # Encode with normalization
         embeddings = model.encode(

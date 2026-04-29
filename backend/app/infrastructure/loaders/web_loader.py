@@ -62,8 +62,27 @@ class WebLoader(BaseLoader):
             response = self.session.get(url, timeout=self.timeout_seconds)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to fetch URL {url}: {e}")
-            raise
+            logger.warning(f"Regular fetch failed for URL {url}: {e}. Trying Jina AI proxy...")
+            try:
+                jina_url = f"https://r.jina.ai/{url}"
+                jina_response = self.session.get(jina_url, timeout=self.timeout_seconds + 5)
+                jina_response.raise_for_status()
+                
+                if len(jina_response.text) > 50:
+                    return jina_response.text, {
+                        "url": url,
+                        "content_type": "text/markdown",
+                        "size_bytes": len(jina_response.text),
+                        "extractor": "jina_proxy",
+                    }
+            except Exception as jina_e:
+                logger.error(f"Jina AI proxy also failed for URL {url}: {jina_e}")
+                
+            return f"Failed to access URL: {url} (Error: {str(e)})", {
+                "url": url,
+                "error": str(e),
+                "extractor": "error",
+            }
 
         content_type = response.headers.get("content-type", "")
         size_bytes = len(response.content)

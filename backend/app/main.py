@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
+import shutil
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,6 +28,37 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.on_event("startup")
+    async def startup_event() -> None:
+        logger = logging.getLogger("app.startup")
+        
+        # 1. Clean data on startup if requested
+        if os.getenv("MULTIRAG_CLEAN_START", "false").lower() == "true":
+            logger.info("MULTIRAG_CLEAN_START is enabled. Wiping all local data to start fresh...")
+            for directory in [settings.data_dir, settings.chroma_persist_dir, settings.cache_dir]:
+                if directory.exists():
+                    shutil.rmtree(directory, ignore_errors=True)
+                    
+        # 2. Warm up embedding model and ChromaDB in background to speed up first request
+        async def warmup_task() -> None:
+            logger.info("Warming up embedding model and vector store in background...")
+            try:
+                from app.api.dependencies import get_rag_system
+                system = get_rag_system()
+                
+                # Pre-initialize vector store and embeddings
+                vector_store = system._ask_question.vector_store
+                if hasattr(vector_store, "_get_client"):
+                    vector_store._get_client()
+                if hasattr(vector_store, "_get_embeddings"):
+                    vector_store._get_embeddings()
+                    
+                logger.info("Warmup complete. Embedding models are loaded and system is fast.")
+            except Exception as e:
+                logger.error(f"Background warmup failed: {e}")
+                
+        asyncio.create_task(warmup_task())
 
     @app.exception_handler(MultiRagError)
     async def multi_rag_exception_handler(request: Request, exc: MultiRagError) -> JSONResponse:

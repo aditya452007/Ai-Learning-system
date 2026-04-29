@@ -11,3 +11,8 @@ data/cache/*
 !data/workspaces/.gitkeep
 !data/cache/.gitkeep
 .env
+backend/data/*
+graphify-out/*
+.graphify_ast.json
+.graphify_detect.json
+.graphify_python

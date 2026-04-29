@@ -49,7 +49,7 @@ class AskQuestion:
         self.context_builder = context_builder
         self.citation_verifier = citation_verifier
 
-    async def execute(self, query: RetrievalQuery) -> Answer:
+    async def execute(self, query: RetrievalQuery, generation_params: dict | None = None) -> Answer:
         started = time.perf_counter()
         workspace = self.repository.get_workspace(query.workspace_id)
         planned_mode = self.query_planner.plan(query.text, query.mode)
@@ -66,13 +66,22 @@ class AskQuestion:
         chunks = self.repository.list_chunks(query.workspace_id)
         selected_chunks, citations = self.context_builder.build(retrieval_results, chunks, sources)
 
+        # Pass generation parameters if supported
+        gen_kwargs = {}
+        if generation_params:
+            gen_kwargs = {
+                k: v for k, v in generation_params.items()
+                if k in ["temperature", "top_p", "top_k", "max_tokens", "system_prompt"]
+            }
+        
         generated = await self.generation_provider.generate_answer(
             GenerationRequest(
                 query=query.text,
                 chunks=selected_chunks,
                 citations=[citation.citation_id for citation in citations],
                 workspace_name=workspace.name,
-            )
+            ),
+            **gen_kwargs
         )
         verified = self.citation_verifier.verified_citations(generated.text, citations, generated.used_citation_ids)
         if selected_chunks and not verified:

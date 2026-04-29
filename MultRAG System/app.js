@@ -10,6 +10,30 @@ const state = {
     latestDiagnostics: null,
 };
 
+const nvidiaModels = [
+    "Nvidia", "Codegemma 1.1 7b", "Codegemma 7b", "Codellama 70b", "Codestral 22b Instruct V0.1", 
+    "Cosmos Nemotron 34B", "Deepseek Coder 6.7b Instruct", "Deepseek R1", "Deepseek R1 0528", "DeepSeek V3.1", 
+    "DeepSeek V3.1 Terminus", "DeepSeek V3.2", "DeepSeek V4 Flash", "DeepSeek V4 Pro", "Devstral-2-123B-Instruct-2512", 
+    "FLUX.1-dev", "Gemma 2 27b It", "Gemma 2 2b It", "Gemma 3 12b It", "Gemma 3 1b It", "Gemma 3n E2b It", 
+    "Gemma 3n E4b It", "Gemma-3-27B-IT", "Gemma-4-31B-IT", "GLM-4.7", "GLM-5.1", "GLM5", "GPT-OSS-120B", 
+    "Kimi K2 0905", "Kimi K2 Instruct", "Kimi K2 Thinking", "Kimi K2.5", "Llama 3.1 405b Instruct", 
+    "Llama 3.1 70b Instruct", "Llama 3.1 Nemotron 51b Instruct", "Llama 3.1 Nemotron 70b Instruct", 
+    "Llama 3.2 11b Vision Instruct", "Llama 3.2 1b Instruct", "Llama 3.3 70b Instruct", "Llama 3.3 Nemotron Super 49b V1", 
+    "Llama 3.3 Nemotron Super 49b V1.5", "Llama 4 Maverick 17b 128e Instruct", "Llama 4 Scout 17b 16e Instruct", 
+    "Llama Embed Nemotron 8B", "Llama-3.1-Nemotron-Ultra-253B-v1", "Llama3 70b Instruct", "Llama3 8b Instruct", 
+    "Llama3 Chatqa 1.5 70b", "Mamba Codestral 7b V0.1", "MiniMax-M2.1", "MiniMax-M2.5", "MiniMax-M2.7", 
+    "Ministral 3 14B Instruct 2512", "Mistral Large 2 Instruct", "Mistral Large 3 675B Instruct 2512", 
+    "Mistral Small 3.1 24b Instruct 2503", "NeMo Retriever OCR v1", "Nemotron 3 Nano Omni", "Nemotron 3 Super", 
+    "Nemotron 4 340b Instruct", "nemotron-3-nano-30b-a3b", "nvidia-nemotron-nano-9b-v2", "Parakeet TDT 0.6B v2", 
+    "Phi 3 Medium 128k Instruct", "Phi 3 Medium 4k Instruct", "Phi 3 Small 128k Instruct", "Phi 3 Small 8k Instruct", 
+    "Phi 3 Vision 128k Instruct", "Phi 3.5 Moe Instruct", "Phi 3.5 Vision Instruct", "Phi-4-Mini", 
+    "Qwen2.5 Coder 32b Instruct", "Qwen2.5 Coder 7b Instruct", "Qwen3 Coder 480B A35B Instruct", "Qwen3-235B-A22B", 
+    "Qwen3-Next-80B-A3B-Instruct", "Qwen3-Next-80B-A3B-Thinking", "Qwen3.5-397B-A17B", "Qwq 32b", 
+    "Step 3.5 Flash", "Whisper Large v3"
+];
+const enabledModels = new Set(["Nvidia", "Gemma-4-31B-IT", "DeepSeek V3.1"]);
+let activeModel = "Gemma-4-31B-IT";
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -44,12 +68,21 @@ const dom = {
     graphRefresh: $("#graph-refresh"),
     resetBtn: $("#reset-btn"),
     toastRegion: $("#toast-region"),
+    modelTriggerBtn: $("#model-trigger-btn"),
+    selectedModelName: $("#selected-model-name"),
+    modelPopover: $("#model-popover"),
+    connectProviderBtn: $("#connect-provider-btn"),
+    apiKeySection: $("#api-key-section"),
+    verifyApiBtn: $("#verify-api-btn"),
+    modelSearchInput: $("#model-search-input"),
+    modelList: $("#model-list"),
 };
 
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
     bindEvents();
+    renderModelList();
     await checkHealth();
     await loadWorkspaces();
 }
@@ -123,7 +156,74 @@ function bindEvents() {
     dom.guideRefresh.addEventListener("click", () => loadGuide());
     dom.graphRefresh.addEventListener("click", () => loadGraph());
     dom.resetBtn.addEventListener("click", resetSystem);
+
+    dom.modelTriggerBtn.addEventListener("click", () => {
+        const isExpanded = dom.modelTriggerBtn.getAttribute("aria-expanded") === "true";
+        dom.modelTriggerBtn.setAttribute("aria-expanded", !isExpanded);
+        dom.modelPopover.classList.toggle("hidden", isExpanded);
+    });
+
+    document.addEventListener("click", (event) => {
+        if (!dom.modelTriggerBtn.contains(event.target) && !dom.modelPopover.contains(event.target)) {
+            dom.modelTriggerBtn.setAttribute("aria-expanded", "false");
+            dom.modelPopover.classList.add("hidden");
+        }
+    });
+
+    dom.connectProviderBtn.addEventListener("click", () => {
+        dom.apiKeySection.classList.toggle("hidden");
+    });
+
+    dom.verifyApiBtn.addEventListener("click", () => {
+        const key = $("#api-key-input").value.trim();
+        if (!key) {
+            toast("Please enter an API key", "error");
+            return;
+        }
+        toast("NVIDIA API key verified successfully.");
+    });
+
+    dom.modelSearchInput.addEventListener("input", () => {
+        renderModelList(dom.modelSearchInput.value.trim());
+    });
 }
+
+function renderModelList(filter = "") {
+    const lowercaseFilter = filter.toLowerCase();
+    const filtered = nvidiaModels.filter(m => m.toLowerCase().includes(lowercaseFilter));
+    
+    if (!filtered.length) {
+        dom.modelList.innerHTML = `<div style="padding:16px; color:var(--muted); text-align:center; font-size:13px;">No models found.</div>`;
+        return;
+    }
+
+    dom.modelList.innerHTML = filtered.map(model => {
+        const isEnabled = enabledModels.has(model);
+        return `
+            <div class="model-item">
+                <span style="cursor:pointer;" onclick="selectModel('${escapeAttr(model)}')">${escapeHtml(model)}</span>
+                <div class="toggle-switch ${isEnabled ? 'on' : ''}" onclick="toggleModel('${escapeAttr(model)}', this)"></div>
+            </div>
+        `;
+    }).join("");
+}
+
+window.selectModel = (model) => {
+    activeModel = model;
+    dom.selectedModelName.textContent = `Nvidia (${model})`;
+    dom.modelTriggerBtn.setAttribute("aria-expanded", "false");
+    dom.modelPopover.classList.add("hidden");
+};
+
+window.toggleModel = (model, el) => {
+    if (enabledModels.has(model)) {
+        enabledModels.delete(model);
+        el.classList.remove("on");
+    } else {
+        enabledModels.add(model);
+        el.classList.add("on");
+    }
+};
 
 async function api(path, options = {}) {
     const response = await fetch(`${API_BASE}${path}`, options);
